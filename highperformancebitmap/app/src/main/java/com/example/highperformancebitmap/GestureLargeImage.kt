@@ -87,23 +87,44 @@ class GestureLargeImageView @JvmOverloads constructor(
         return ret
     }
 
-    // --- Scale 逻辑 ---
     override fun onScale(detector: ScaleGestureDetector): Boolean {
-        mScale *= detector.scaleFactor
-        mScale = max(0.1f, min(mScale, 4.0f))
+        val newScale = mScale * detector.scaleFactor
 
-        // 计算新的 Rect 大小：View宽 / Scale
-        val newWidth = (width / mScale).toInt()
-        val newHeight = (height / mScale).toInt()
+        // 1. 计算最小缩放比例 (Fit Center)
+        val minScaleW = width.toFloat() / mImageWidth
+        val minScaleH = height.toFloat() / mImageHeight
+        val minScale = min(minScaleW, minScaleH)
 
-        // 中心缩放计算
-        val centerX = mRect.centerX()
-        val centerY = mRect.centerY()
+        // 2. 赋值
+        mScale = newScale
 
-        mRect.left = centerX - newWidth / 2
-        mRect.right = mRect.left + newWidth
-        mRect.top = centerY - newHeight / 2
-        mRect.bottom = mRect.top + newHeight
+        // 【核心修复】强力吸附 (Sticky Snap)
+        // 之前判定太严格(0.001f)，导致很难触发吸附。
+        // 现在改为：只要缩放比例小于 "最小值的 1.05 倍" (即接近 5% 以内)，就强制吸附
+        if (mScale < minScale * 1.05f) {
+            mScale = minScale
+        }
+
+        // 限制最大放大倍数
+        mScale = min(mScale, 4.0f)
+
+        // 3. 计算 Rect
+        if (mScale == minScale) {
+            // 【关键】如果是最小比例，直接设为全图，消除任何浮点数误差
+            mRect.set(0, 0, mImageWidth, mImageHeight)
+        } else {
+            // 正常缩放计算
+            val newWidth = (width / mScale).toInt()
+            val newHeight = (height / mScale).toInt()
+
+            val centerX = mRect.centerX()
+            val centerY = mRect.centerY()
+
+            mRect.left = centerX - newWidth / 2
+            mRect.right = mRect.left + newWidth
+            mRect.top = centerY - newHeight / 2
+            mRect.bottom = mRect.top + newHeight
+        }
 
         checkBound()
         updateCore()
