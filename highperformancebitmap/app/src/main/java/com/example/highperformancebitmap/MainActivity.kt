@@ -115,7 +115,7 @@ class MainActivity : AppCompatActivity() {
         container.removeAllViews()
 
         try {
-            val largeImageView = LargeImageView(this)
+            val largeImageView = GestureLargeImageView(this)
             container.addView(largeImageView)
 
             val inputStream: InputStream = assets.open("big_image.jpg")
