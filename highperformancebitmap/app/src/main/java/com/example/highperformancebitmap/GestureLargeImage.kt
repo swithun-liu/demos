@@ -119,24 +119,36 @@ class GestureLargeImageView @JvmOverloads constructor(
         return true
     }
 
+    // 1. 修正滑动：距离需要除以 Scale
     override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
         if (mScaleGestureDetector.isInProgress) return false
-        mRect.offset(distanceX.toInt(), distanceY.toInt())
+
+        // 核心修正：屏幕距离 / 缩放比例 = 原图逻辑距离
+        // 举例：缩小到 0.5 倍时，mScale=0.5。手指滑 100px，实际应移动 100/0.5 = 200px。
+        val moveX = distanceX / mScale
+        val moveY = distanceY / mScale
+
+        mRect.offset(moveX.toInt(), moveY.toInt())
         checkBound()
         updateCore()
         return true
     }
 
+    // 2. 修正惯性滑动：速度也需要除以 Scale
     override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
         if (mScaleGestureDetector.isInProgress) return false
 
+        // 核心修正：物理速度映射
+        // 如果不除以 scale，缩小时惯性也会显得特别小，滑一下就停了
+        val scaledVx = velocityX / mScale
+        val scaledVy = velocityY / mScale
+
         mScroller.fling(
             mRect.left, mRect.top,
-            -velocityX.toInt(), -velocityY.toInt(),
+            -scaledVx.toInt(), -scaledVy.toInt(),
             0, mImageWidth - mRect.width(),
             0, mImageHeight - mRect.height()
         )
-        // 触发 computeScroll
         invalidate()
         return true
     }

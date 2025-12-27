@@ -4,29 +4,27 @@ import time
 
 # --- 灭世级参数 ---
 # 宽 35000 * 高 30000 = 10.5亿像素
-# Android 内存占用预计：3.91 GB (ARGB_8888)
-# 任何现存 Android 设备都不应该能一次性硬解这张图。
+# 预期生成一个全彩色的巨大马赛克图
 WIDTH = 35000
 HEIGHT = 30000
-GRID_SIZE = 1000  # 格子再画大一点，不然电脑要画太久
-FILENAME = "big_image.jpg"
+GRID_SIZE = 1000  # 格子大小
+FILENAME = "big_image.jpg" # 【已修改】直接叫这个名字，不用改 Android 代码
 
 # 解除 Pillow 的像素限制
 Image.MAX_IMAGE_PIXELS = None
 
 print("="*50)
-print(f"警告：即将生成 {WIDTH}x{HEIGHT} 的灭世级巨图！")
-print("这会占用你的电脑约 4GB+ 内存进行处理。")
-print("如果电脑卡死，请强制结束 Python 进程。")
+print(f"警告：即将生成 {WIDTH}x{HEIGHT} 的【全彩】灭世级巨图！")
+print("这次不仅有线，整个背景都会被填满颜色。")
+print(f"保存文件名: {FILENAME}")
 print("="*50)
-time.sleep(2) # 给个后悔的时间
+time.sleep(1)
 
 start_time = time.time()
 
 # 1. 创建画布
 print(f"[{time.time()-start_time:.1f}s] 正在分配电脑内存...")
 try:
-    # 这里可能会让电脑卡一下
     img = Image.new('RGB', (WIDTH, HEIGHT), color='white')
 except MemoryError:
     print("错误：你的电脑内存不足以生成这张图！")
@@ -36,15 +34,15 @@ draw = ImageDraw.Draw(img)
 
 # 2. 字体设置
 try:
-    # 字体搞大点
-    font = ImageFont.truetype("Arial.ttf", 150) 
+    # 尝试加载字体，如果没有就用默认的
+    font = ImageFont.truetype("Arial.ttf", 120) 
 except:
     font = None
 
-print(f"[{time.time()-start_time:.1f}s] 开始绘制内容 (请耐心等待)...")
+print(f"[{time.time()-start_time:.1f}s] 开始绘制全彩内容 (请耐心等待)...")
 
-# 3. 绘制内容 (稀疏绘制，节省时间)
-total_steps = (WIDTH // GRID_SIZE) * (HEIGHT // GRID_SIZE)
+# 3. 绘制内容
+total_steps = (WIDTH // GRID_SIZE + 1) * (HEIGHT // GRID_SIZE + 1)
 current_step = 0
 
 for x in range(0, WIDTH, GRID_SIZE):
@@ -53,24 +51,37 @@ for x in range(0, WIDTH, GRID_SIZE):
         if current_step % 100 == 0:
              print(f"进度: {current_step / total_steps * 100:.1f}%")
 
-        color = (x % 255, (y // 200) % 255, (x+y) % 255)
-        # 画矩形框
-        draw.rectangle([x, y, x + GRID_SIZE, y + GRID_SIZE], outline=color, width=5)
-        # 写巨大的坐标
-        text = f"{x},{y}"
-        draw.text((x + 50, y + 50), text, fill="black", font=font)
+        # 生成基于坐标的颜色
+        r = x % 255
+        g = (y // 100) % 255
+        b = (x + y) % 255
+        color = (r, g, b)
 
-print(f"[{time.time()-start_time:.1f}s] 绘制完成，正在进行 JPG 压缩保存 (最耗时步骤)...")
-print("电脑风扇可能会起飞，请稍候...")
+        # 【关键】fill=color 填充实心颜色
+        draw.rectangle(
+            [x, y, x + GRID_SIZE, y + GRID_SIZE],
+            fill=color,    
+            outline=color  
+        )
+
+        # 写坐标 (带简易描边，防止看不清)
+        if font:
+            text = f"{x},{y}"
+            offset = 2
+            # 伪造白色描边
+            draw.text((x + 50 + offset, y + 50 + offset), text, fill="white", font=font)
+            draw.text((x + 50 - offset, y + 50 - offset), text, fill="white", font=font)
+            # 黑色主体
+            draw.text((x + 50, y + 50), text, fill="black", font=font)
+
+print(f"[{time.time()-start_time:.1f}s] 绘制完成，正在进行 JPG 压缩保存...")
 
 # 4. 保存
-# 使用较低质量以减小文件体积，方便传输，不影响解压后的内存占用
 img.save(FILENAME, quality=60) 
 
 end_time = time.time()
 print("="*50)
 print(f"✅ 完成！耗时: {end_time - start_time:.1f} 秒")
-print(f"灭世图已生成: {FILENAME}")
-print("请将其放入 Android 项目的 assets 目录覆盖原图。")
-print("预期结果：点击普通加载后，Toast 提示约 3.9GB，然后瞬间触发 OOM 异常。")
+print(f"文件已生成: {FILENAME}")
+print("直接覆盖到 Android 项目的 assets 目录即可。")
 print("="*50)
