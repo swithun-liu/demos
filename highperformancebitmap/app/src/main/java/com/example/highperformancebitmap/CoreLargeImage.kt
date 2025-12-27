@@ -8,11 +8,8 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.util.AttributeSet
-import android.util.Log
 import android.view.View
 import java.io.InputStream
-import kotlin.math.abs
-import kotlin.system.measureTimeMillis
 
 /**
  * 【渲染核心】（已修复缩放花屏问题）
@@ -27,9 +24,6 @@ class CoreLargeImageView @JvmOverloads constructor(
         private set
     var imageHeight = 0
         private set
-
-    // 【新增】性能模式开关 (默认开启 V2)
-    var useAggressiveMode: Boolean = true
 
     private val mRect = Rect()
     private val mOptions = BitmapFactory.Options()
@@ -96,7 +90,7 @@ class CoreLargeImageView @JvmOverloads constructor(
                 val scaleY = viewHeight.toFloat() / bitmap.height
 
                 // 3.2 取较小值，保证图片能全部塞进屏幕，且不变形
-                var scale = kotlin.math.min(scaleX, scaleY)
+                val scale = kotlin.math.min(scaleX, scaleY)
 
                 // 3.3 计算居中偏移量
                 // (屏幕宽 - 图片缩放后的宽) / 2 = X轴偏移量
