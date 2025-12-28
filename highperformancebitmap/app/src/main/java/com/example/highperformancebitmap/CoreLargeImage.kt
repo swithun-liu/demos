@@ -5,10 +5,11 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Matrix
+import android.graphics.Paint
 import android.graphics.Rect
 import android.util.AttributeSet
-import android.util.Log
 import android.view.View
 import java.io.InputStream
 import kotlin.math.abs
@@ -30,6 +31,18 @@ class CoreLargeImageView @JvmOverloads constructor(
     private val mOptions = BitmapFactory.Options()
     private var mReuseBitmap: Bitmap? = null
     private val mMatrix = Matrix()
+
+    // --- 【新增】调试用画笔 ---
+    private val mDebugTextPaint = Paint().apply {
+        color = Color.WHITE
+        textSize = 40f
+        isAntiAlias = true
+        setShadowLayer(3f, 1f, 1f, Color.BLACK) // 加阴影防止看不清
+    }
+    private val mDebugBgPaint = Paint().apply {
+        color = Color.parseColor("#80000000") // 半透明黑底
+        style = Paint.Style.FILL
+    }
 
     init {
         mOptions.inPreferredConfig = Bitmap.Config.RGB_565
@@ -61,9 +74,7 @@ class CoreLargeImageView @JvmOverloads constructor(
         val viewHeight = height
         if (viewWidth == 0 || viewHeight == 0) return
 
-        // --- 1. 强行修正边界 (防止崩溃) ---
-        // 这一步如果不加，关闭修复开关时可能会直接 Crash 而不是花屏，
-        // 为了让你能看到花屏效果，我们保留边界修正，只控制内存复用的逻辑。
+        // 边界修正
         if (mRect.left < 0) mRect.left = 0
         if (mRect.top < 0) mRect.top = 0
         if (mRect.right > imageWidth) mRect.right = imageWidth
@@ -73,51 +84,77 @@ class CoreLargeImageView @JvmOverloads constructor(
         val sampleSize = calculateInSampleSizeV3(mRect.width(), viewWidth)
         mOptions.inSampleSize = sampleSize
 
-        // --- 2. 内存复用逻辑 (开关控制点) ---
+        // 计算目标宽度
         val targetWidth = mRect.width() / sampleSize
 
+        // 记录旧宽度用于显示 (如果没有旧图，那它就是即将生成的宽度)
+        val containerWidth = mReuseBitmap?.width ?: targetWidth
+
         if (mReuseBitmap != null) {
-            // 【关键修改】这里加上了开关判断
-            // 如果开启修复(true)：检查尺寸差异，差异大则置空。
-            // 如果关闭修复(false)：不管尺寸差多少，强行复用！(这就会导致花屏)
             if (enableArtifactsFix) {
                 if (abs(mReuseBitmap!!.width - targetWidth) > 5) {
-                    mReuseBitmap = null // 放弃旧图，避免花屏
+                    mReuseBitmap = null
                 }
-            } else {
-                // 关闭修复模式：什么都不做，让它强行往下走
             }
         }
 
         mOptions.inBitmap = mReuseBitmap
 
         try {
-            // 解码
             mReuseBitmap = decoder.decodeRegion(mRect, mOptions)
-
             val bitmap = mReuseBitmap
+
             if (bitmap != null) {
+                // 绘制图片
                 mMatrix.reset()
                 val scaleX = viewWidth.toFloat() / bitmap.width
                 val scaleY = viewHeight.toFloat() / bitmap.height
                 val scale = kotlin.math.min(scaleX, scaleY)
                 val dx = (viewWidth - bitmap.width * scale) / 2
                 val dy = (viewHeight - bitmap.height * scale) / 2
-
                 mMatrix.setScale(scale, scale)
                 mMatrix.postTranslate(dx, dy)
                 canvas.drawBitmap(bitmap, mMatrix, null)
+
+                // --- 【新增】绘制可视化调试面板 ---
+                drawDebugHUD(canvas, containerWidth, targetWidth, bitmap.width)
             }
-        } catch (e: IllegalArgumentException) {
-            // 如果关闭了修复，这里极有可能抛出异常 (因为复用条件不仅是 Stride，还有字节数大小)
-            // 为了不 Crash 导致你看不到现象，我们 Catch 住并打印日志
-            Log.e(TAG, "复用失败(系统底层拒绝): ${e.message}")
-            // 如果系统强制拒绝复用，我们只能置空，否则下一次还会崩
-            mReuseBitmap = null
         } catch (e: Exception) {
             e.printStackTrace()
+            // 绘制错误提示
+            canvas.drawColor(Color.RED)
+            canvas.drawText("CRASHED: ${e.javaClass.simpleName}", 50f, 100f, mDebugTextPaint)
             mReuseBitmap = null
         }
+    }
+
+    // --- 【新增】绘制 HUD 面板的方法 ---
+    private fun drawDebugHUD(canvas: Canvas, oldWidth: Int, reqWidth: Int, realWidth: Int) {
+        val diff = abs(oldWidth - reqWidth)
+        val isMismatch = diff > 0 && !enableArtifactsFix
+
+        // 1. 绘制背景条
+        canvas.drawRect(0f, 0f, width.toFloat(), 180f, mDebugBgPaint)
+
+        // 2. 状态指示灯
+        mDebugTextPaint.color = if (isMismatch) Color.RED else Color.GREEN
+        val statusText = if (isMismatch) "⚠ 内存错位 (GLITCHING)" else "✔ 内存对齐 (SAFE)"
+        mDebugTextPaint.textSize = 50f
+        canvas.drawText(statusText, 30f, 60f, mDebugTextPaint)
+
+        // 3. 详细数据
+        mDebugTextPaint.color = Color.WHITE
+        mDebugTextPaint.textSize = 35f
+
+        val line1 = "容器宽(Old Bitmap): $oldWidth px"
+        val line2 = "内容宽(Request): $reqWidth px"
+        val line3 = "差值(Diff): $diff px"
+
+        canvas.drawText(line1, 30f, 110f, mDebugTextPaint)
+
+        // 如果有差值，高亮显示差值
+        if (diff > 0) mDebugTextPaint.color = Color.YELLOW
+        canvas.drawText("$line2   |   $line3", 30f, 150f, mDebugTextPaint)
     }
 
     private fun calculateInSampleSizeV3(reqWidth: Int, viewWidth: Int): Int {
