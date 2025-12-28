@@ -46,6 +46,11 @@ class GestureLargeImageView @JvmOverloads constructor(
         addView(coreView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
+    // 【新增】设置是否开启修复
+    fun setArtifactsFix(enable: Boolean) {
+        coreView.enableArtifactsFix = enable
+    }
+
     /**
      * 对外暴露的设置图片接口
      */

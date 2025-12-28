@@ -7,6 +7,7 @@ import android.util.Log
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.Switch
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import java.io.InputStream
@@ -14,6 +15,7 @@ import java.io.InputStream
 class MainActivity : AppCompatActivity() {
 
     private lateinit var container: FrameLayout
+    private var isFixEnabled = true // 记录当前开关状态
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,6 +29,17 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btnLoadLarge).setOnClickListener {
             loadTheOptimizedWay()
+        }
+
+        // 绑定开关事件
+        findViewById<Switch>(R.id.switchFixArtifacts).setOnCheckedChangeListener { _, isChecked ->
+            isFixEnabled = isChecked
+            // 如果当前已经加载了 GestureLargeImageView，实时更新它的状态
+            val child = container.getChildAt(0)
+            if (child is GestureLargeImageView) {
+                child.setArtifactsFix(isChecked)
+                Toast.makeText(this, if(isChecked) "保护开启：画面正常" else "保护关闭：缩放将花屏", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -116,12 +129,15 @@ class MainActivity : AppCompatActivity() {
 
         try {
             val largeImageView = GestureLargeImageView(this)
+            // 初始化时设置开关状态
+            largeImageView.setArtifactsFix(isFixEnabled)
+
             container.addView(largeImageView)
 
             val inputStream: InputStream = assets.open("big_image.jpg")
             largeImageView.setInputStream(inputStream)
 
-            Toast.makeText(this, "加载成功，内存占用极低", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "加载成功", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             e.printStackTrace()
         }

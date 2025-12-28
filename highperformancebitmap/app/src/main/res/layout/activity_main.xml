@@ -7,30 +7,44 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:padding="10dp">
 
-        <Button
-            android:id="@+id/btnLoadCrash"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="普通加载 (必崩)"
-            android:backgroundTint="#FF5252"
-            android:textColor="#FFFFFF"/>
+            android:orientation="horizontal">
 
-        <View
-            android:layout_width="10dp"
-            android:layout_height="1dp"/>
+            <Button
+                android:id="@+id/btnLoadCrash"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="普通加载 (必崩)"
+                android:backgroundTint="#FF5252"
+                android:textColor="#FFFFFF"/>
 
-        <Button
-            android:id="@+id/btnLoadLarge"
-            android:layout_width="0dp"
+            <View android:layout_width="10dp" android:layout_height="1dp"/>
+
+            <Button
+                android:id="@+id/btnLoadLarge"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="优化加载 (丝滑)"
+                android:backgroundTint="#4CAF50"
+                android:textColor="#FFFFFF"/>
+        </LinearLayout>
+
+        <Switch
+            android:id="@+id/switchFixArtifacts"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="优化加载 (丝滑)"
-            android:backgroundTint="#4CAF50"
-            android:textColor="#FFFFFF"/>
+            android:layout_gravity="end"
+            android:checked="true"
+            android:text="防花屏/内存保护"
+            android:textSize="16sp" />
+
     </LinearLayout>
 
     <FrameLayout
