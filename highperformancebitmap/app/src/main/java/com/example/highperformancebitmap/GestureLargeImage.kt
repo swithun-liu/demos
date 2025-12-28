@@ -27,8 +27,8 @@ class GestureLargeImageView @JvmOverloads constructor(
     GestureDetector.OnGestureListener,
     ScaleGestureDetector.OnScaleGestureListener {
 
-    // --- 组合：将渲染核心作为属性 ---
-    private val coreView: CoreLargeImageView = CoreLargeImageView(context)
+    // --- 【变化点】现在持有的是带 HUD 的外壳 ---
+    private val wrapperView = DebuggableWrapperView(context)
 
     // 手势相关
     private val mGestureDetector = GestureDetector(context, this)
@@ -43,44 +43,39 @@ class GestureLargeImageView @JvmOverloads constructor(
 
     init {
         // 将核心渲染 View 添加为子 View，填满父容器
-        addView(coreView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(wrapperView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
     // 【新增】设置是否开启修复
     fun setArtifactsFix(enable: Boolean) {
-        coreView.enableArtifactsFix = enable
+        wrapperView.setArtifactsFix(enable)
     }
 
     /**
      * 对外暴露的设置图片接口
      */
     fun setInputStream(inputStream: InputStream) {
-        // 1. 先把流给渲染层初始化
-        coreView.setInputStream(inputStream)
+        // 1. 初始化
+        wrapperView.setInputStream(inputStream)
+        mImageWidth = wrapperView.imageWidth
+        mImageHeight = wrapperView.imageHeight
 
-        // 2. 从渲染层同步原始尺寸信息 (用于边界检查)
-        mImageWidth = coreView.imageWidth
-        mImageHeight = coreView.imageHeight
-
-        // 3. 初始化 Rect
+        // 2. 初始全屏
         post {
-            // 需要等 Layout 也就是 coreView 有尺寸了再初始化
             if (width > 0 && height > 0) {
                 mRect.left = 0
                 mRect.top = 0
                 mRect.right = width
                 mRect.bottom = height
                 mScale = 1.0f
-                updateCore()
+                updateView()
             }
         }
     }
 
-    /**
-     * 将计算好的 Rect 同步给 CoreView
-     */
-    private fun updateCore() {
-        coreView.setVisibleRect(mRect)
+    // 更新画面
+    private fun updateView() {
+        wrapperView.setVisibleRect(mRect)
     }
 
     // --- 事件分发 ---
@@ -94,34 +89,17 @@ class GestureLargeImageView @JvmOverloads constructor(
 
     override fun onScale(detector: ScaleGestureDetector): Boolean {
         val newScale = mScale * detector.scaleFactor
+        val minScale = min(width.toFloat() / mImageWidth, height.toFloat() / mImageHeight)
 
-        // 1. 计算最小缩放比例 (Fit Center)
-        val minScaleW = width.toFloat() / mImageWidth
-        val minScaleH = height.toFloat() / mImageHeight
-        val minScale = min(minScaleW, minScaleH)
-
-        // 2. 赋值
         mScale = newScale
-
-        // 【核心修复】强力吸附 (Sticky Snap)
-        // 之前判定太严格(0.001f)，导致很难触发吸附。
-        // 现在改为：只要缩放比例小于 "最小值的 1.05 倍" (即接近 5% 以内)，就强制吸附
-        if (mScale < minScale * 1.05f) {
-            mScale = minScale
-        }
-
-        // 限制最大放大倍数
+        if (mScale < minScale * 1.05f) mScale = minScale
         mScale = min(mScale, 4.0f)
 
-        // 3. 计算 Rect
         if (mScale == minScale) {
-            // 【关键】如果是最小比例，直接设为全图，消除任何浮点数误差
             mRect.set(0, 0, mImageWidth, mImageHeight)
         } else {
-            // 正常缩放计算
             val newWidth = (width / mScale).toInt()
             val newHeight = (height / mScale).toInt()
-
             val centerX = mRect.centerX()
             val centerY = mRect.centerY()
 
@@ -130,9 +108,8 @@ class GestureLargeImageView @JvmOverloads constructor(
             mRect.top = centerY - newHeight / 2
             mRect.bottom = mRect.top + newHeight
         }
-
         checkBound()
-        updateCore()
+        updateView()
         return true
     }
 
@@ -148,20 +125,29 @@ class GestureLargeImageView @JvmOverloads constructor(
     // 1. 修正滑动：距离需要除以 Scale
     override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
         if (mScaleGestureDetector.isInProgress) return false
-
-        // 核心修正：屏幕距离 / 缩放比例 = 原图逻辑距离
-        // 举例：缩小到 0.5 倍时，mScale=0.5。手指滑 100px，实际应移动 100/0.5 = 200px。
         val moveX = distanceX / mScale
         val moveY = distanceY / mScale
 
-        mRect.offset(moveX.toInt(), moveY.toInt())
+        val isWidthFit = mRect.width() >= mImageWidth - 5
+        val isHeightFit = mRect.height() >= mImageHeight - 5
+        val dx = if (isWidthFit) 0 else moveX.toInt()
+        val dy = if (isHeightFit) 0 else moveY.toInt()
+
+        if (dx == 0 && dy == 0) return true
+
+        mRect.offset(dx, dy)
         checkBound()
-        updateCore()
+        updateView()
         return true
     }
 
     // 2. 修正惯性滑动：速度也需要除以 Scale
-    override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+    override fun onFling(
+        e1: MotionEvent?,
+        e2: MotionEvent,
+        velocityX: Float,
+        velocityY: Float
+    ): Boolean {
         if (mScaleGestureDetector.isInProgress) return false
 
         // 核心修正：物理速度映射
@@ -191,7 +177,7 @@ class GestureLargeImageView @JvmOverloads constructor(
             mRect.bottom = mRect.top + currentH
 
             checkBound()
-            updateCore()
+            updateView()
 
             // 继续触发下一帧动画，注意这里是调用自己的 invalidate，
             // 从而间接导致系统再次调用 computeScroll
