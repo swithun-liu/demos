@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.util.AttributeSet
+import android.util.Log
 import android.view.View
 import java.io.InputStream
 import kotlin.math.abs
@@ -129,6 +130,8 @@ class CoreLargeImageView @JvmOverloads constructor(
             // 表现为画面错位、花屏。
             // 策略：如果尺寸差异超过 5 像素，认为 Bitmap 不匹配，放弃复用，置空让系统重新分配。
             if (abs(mReuseBitmap!!.width - targetWidth) > 5) {
+                // 尺寸差异超过 5 像素，认为 Bitmap 不匹配，放弃复用，置空让系统重新分配。
+                Log.e(TAG, "Reuse Bitmap failed, reset to null")
                 mReuseBitmap = null
             }
         }
@@ -178,9 +181,13 @@ class CoreLargeImageView @JvmOverloads constructor(
         } catch (e: IllegalArgumentException) {
             // 复用失败捕获：有时候 inBitmap 的条件极其严苛（比如新图比旧图大 1 个字节），会抛异常。
             // 补救措施：直接丢弃旧图，下一次 onDraw 会重新分配。
+             Log.e(TAG, "Reuse Bitmap failed, reset to null exception: ${e.message}")
             mReuseBitmap = null
         } catch (e: Exception) {
-            e.printStackTrace()
+            // 其他异常捕获：比如 BitmapFactory 内部错误、内存不足等。
+            // 补救措施：直接丢弃旧图，下一次 onDraw 会重新分配。
+             Log.e(TAG, "Reuse Bitmap failed, reset to null exception: ${e.message}")
+            mReuseBitmap = null
         }
     }
 
@@ -243,5 +250,9 @@ class CoreLargeImageView @JvmOverloads constructor(
         }
 
         return inSampleSize
+    }
+
+    companion object {
+        private const val TAG = "CoreLargeImage"
     }
 }
